@@ -2,6 +2,8 @@
 
 namespace DigitalCreative\Filepond;
 
+use App\Helpers\Images\ImageHelper;
+use App\Models\Image;
 use Exception;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Http\File;
@@ -11,6 +13,7 @@ use Illuminate\Support\Str;
 use Laravel\Nova\Fields\Field;
 use Laravel\Nova\Http\Controllers\ResourceShowController;
 use Laravel\Nova\Http\Requests\NovaRequest;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Mime\MimeTypes;
 
 class Filepond extends Field
@@ -234,68 +237,26 @@ class Filepond extends Field
      */
     protected function fillAttributeFromRequest(NovaRequest $request, $requestAttribute, $model, $attribute)
     {
+        $model::dispatchConversionsSynchronous();
 
         $currentImages = collect($model->{$requestAttribute});
 
-        /**
-         * null when all images are removed
-         */
-        if ($request->input($requestAttribute) === null) {
-
-            $this->removeImages($currentImages);
-
-            $model->setAttribute($requestAttribute, null);
-
-            return;
-
-        }
-
-        if ($this->multiple === false) {
-
-            $serverId = static::getPathFromServerId($request->input($requestAttribute));
-
-            /**
-             * If no changes were made the first image should match the given serverId
-             */
-            if ($currentImages->first() === $serverId) {
-
-                return;
-
-            }
-
-            $this->removeImages($currentImages);
-
-            $file = new File($serverId);
-
-            $model->setAttribute($attribute, $this->moveFile($file));
-
-            return;
-
-        }
-
-        /**
-         * If it`s a multiple files request
-         */
-        $files = collect(explode(',', $request->input($requestAttribute)))->map(function ($file) {
+        $request_images = collect(explode(',', $request->input($requestAttribute)))->map(function($file) {
             return static::getPathFromServerId($file);
         });
 
-        $toKeep = $files->intersect($currentImages); // files that exist on the request and on the model
-        $toAppend = $files->diff($currentImages); // files that exist only on the request
-        $toDelete = $currentImages->diff($files); // files that doest exist on the request but exist on the model
-
-        $this->removeImages($toDelete);
-
-        foreach ($toAppend as $serverId) {
-
-            $file = new File($serverId);
-
-            $toKeep->push($this->moveFile($file));
-
+        foreach($currentImages as $image) {
+            if(!in_array($image->id, $request_images->toArray())) {
+                $image->delete();
+                $model->images()->where('order', '>', $image->order)->decrement('order');
+            }
         }
 
-        $model->setAttribute($attribute, $toKeep->values());
-
+        foreach($request_images as $index => $image) {
+            if(!ctype_digit($image)) {
+                $model->addImage(ImageHelper::getFile($image), null, $index+1);
+            }
+        }
     }
 
     private function trimSlashes(string $path): string
@@ -305,7 +266,6 @@ class Filepond extends Field
 
     private function moveFile(File $file): string
     {
-
         $name = $this->storeAsCallback ? call_user_func($this->storeAsCallback, $file) : $file->getBasename();
         $fullPath = $this->trimSlashes($this->directory ?? '') . '/' . $this->trimSlashes($name);
 
@@ -323,12 +283,11 @@ class Filepond extends Field
 
     private function removeImages(Collection $images): void
     {
+        // foreach ($images as $image) {
 
-        foreach ($images as $image) {
+        //     Storage::disk($this->disk)->delete($image);
 
-            Storage::disk($this->disk)->delete($image);
-
-        }
+        // }
 
     }
 
@@ -345,11 +304,13 @@ class Filepond extends Field
 
         $value = parent::resolveAttribute($resource, $attribute);
 
-        return collect($value)->map(function ($value) {
+        return collect($value)->map(function (\App\Models\Image $image) {
             return [
-                'source' => $this->getServerIdFromPath($value),
+                'source' => $this->getServerIdFromPath($image->id),
                 'options' => [
-                    'type' => 'local'
+                    'type' => 'local',
+                    'disk' => ($image->cloud ? 'cloud' : 'local'),
+                    'order' => $image->order
                 ]
             ];
         });

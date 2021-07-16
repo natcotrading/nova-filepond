@@ -2,6 +2,7 @@
 
 namespace DigitalCreative\Filepond\Http\Controllers;
 
+use App\Models\Image;
 use DigitalCreative\Filepond\Filepond;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Http\Request;
@@ -102,21 +103,20 @@ class FilepondController extends BaseController
 
     public function load(Request $request)
     {
+        $image_id = Filepond::getPathFromServerId($request->input('serverId'));
 
-        $disk = $request->input('disk');
+        $image_model = Image::find($image_id);
 
-        $serverId = Filepond::getPathFromServerId($request->input('serverId'));
+        $disk = 'local';
+        if($image_model->cloud) {
+            $disk = 'cloud';
+        }
 
-        $pathInfo = pathinfo($serverId);
-        $filename = $pathInfo[ 'filename' ];
-        $basename = $pathInfo[ 'basename' ];
-        $extension = $pathInfo[ 'extension' ];
+        $response = response(Storage::disk($disk)->get($image_model->getPath()))
+            ->header('Content-Disposition', "inline; name=\"$image_model->name\"; filename=\"$image_model->name\"")
+            ->header('Content-Length', Storage::disk($disk)->size($image_model->getPath()));
 
-        $response = response(Storage::disk($disk)->get($serverId))
-            ->header('Content-Disposition', "inline; name=\"$filename\"; filename=\"$basename\"")
-            ->header('Content-Length', Storage::disk($disk)->size($serverId));
-
-        if ($mimeType = Filepond::guessMimeType($extension)) {
+        if ($mimeType = Filepond::guessMimeType($image_model->inferExtension())) {
 
             $response->header('Content-Type', $mimeType);
 

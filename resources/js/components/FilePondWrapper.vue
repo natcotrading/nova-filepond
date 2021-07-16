@@ -113,7 +113,7 @@
             cssVars() {
                 return {
                     '--filepond-column': (100 / (this.columns || this.field.columns)) + '%',
-                    '--filepond-max-height': this.field.maxHeight
+                    '--filepond-max-height': this.field.maxHeight,
                 }
             }
         }

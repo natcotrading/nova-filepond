@@ -5,8 +5,9 @@
         <file-pond-wrapper
             slot="value"
             :disabled="true"
-            :allow-image-preview="!field.multiple"
+            :allow-image-preview="true"
             :limit="field.value.length"
+            :allow-remove="false"
             :field="field"/>
 
     </panel-item>
