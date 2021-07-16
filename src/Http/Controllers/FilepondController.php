@@ -19,6 +19,7 @@ use Laravel\Nova\Resource;
 class FilepondController extends BaseController
 {
     use ValidatesRequests;
+    
 
     /**
      * Uploads the file to the temporary directory
