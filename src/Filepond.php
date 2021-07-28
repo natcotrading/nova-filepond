@@ -240,10 +240,15 @@ class Filepond extends Field
         $model::dispatchConversionsSynchronous();
 
         $currentImages = collect($model->{$requestAttribute});
+        
+
+        \Log::alert(explode(',', $request->input($requestAttribute)));
 
         $request_images = collect(explode(',', $request->input($requestAttribute)))->map(function($file) {
-            return static::getPathFromServerId($file);
-        });
+            if($file !== null && $file !== "") {
+                return static::getPathFromServerId($file);
+            }
+        })->filter();
 
         foreach($currentImages as $image) {
             if(!in_array($image->id, $request_images->toArray())) {
